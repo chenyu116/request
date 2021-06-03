@@ -32,8 +32,8 @@ import (
 type Request struct {
 	config *Config
 	// request method,default is GET
-	method string
-	rawURL string
+	method               string
+	rawURL               string
 	requestBody          io.Reader
 	request              *http.Request
 	response             *http.Response
@@ -111,7 +111,7 @@ func (r *Request) Do() (statusCode int, err error) {
 	}
 	var i uint8
 	for i = 0; i <= r.retryTimes; i++ {
-		r.request, err = http.NewRequest(r.method, URL.String(), r.requestBody)
+		r.request, err = http.NewRequestWithContext(context.Background(), r.method, URL.String(), r.requestBody)
 		if err != nil {
 			continue
 		}

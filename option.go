@@ -120,7 +120,6 @@ func WithResponseBodyToJson(unwrapTarget interface{}) Option {
 
 func WithBodyForm(keyPairs ...string) Option {
 	return func(request *Request) {
-		request.header.Set("content-type", "application/x-www-form-urlencoded")
 		v := url.Values{}
 		keyPairsLen := len(keyPairs)
 		if keyPairsLen%2 == 1 {
@@ -133,19 +132,20 @@ func WithBodyForm(keyPairs ...string) Option {
 			}
 			v.Set(keyPairs[i], keyPairs[i+1])
 		}
+		request.header.Set("content-type", "application/x-www-form-urlencoded")
 		request.requestBody = strings.NewReader(v.Encode())
 	}
 }
 
 func WithBodyJson(body interface{}) Option {
 	return func(request *Request) {
-		request.header.Set("content-type", "application/json; charset=utf-8")
 		buf := new(bytes.Buffer)
 		err := json.NewEncoder(buf).Encode(body)
 		if err != nil {
 			request.errors = append(request.errors, err)
 			return
 		}
+		request.header.Set("content-type", "application/json; charset=utf-8")
 		request.requestBody = buf
 	}
 }
@@ -189,6 +189,9 @@ func WithBodyFiles(files []File, fieldsKeyPairs ...string) Option {
 			fieldsKeyPairs = append(fieldsKeyPairs, "")
 		}
 		for i := 0; i < fieldsLen; i += 2 {
+			if fieldsKeyPairs[i] == "" {
+				continue
+			}
 			err := writer.WriteField(fieldsKeyPairs[i], fieldsKeyPairs[i+1])
 			if err != nil {
 				request.errors = append(request.errors, err)
