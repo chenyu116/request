@@ -137,10 +137,16 @@ func WithBodyForm(keyPairs ...string) Option {
 	}
 }
 
-func WithBodyJson(body interface{}) Option {
+func WithBodyJson(body interface{}, escape ...bool) Option {
 	return func(request *Request) {
 		buf := new(bytes.Buffer)
-		err := json.NewEncoder(buf).Encode(body)
+		encoder := json.NewEncoder(buf)
+		escapeHTML := false
+		if len(escape) > 0 && escape[0] == true {
+			escapeHTML = true
+		}
+		encoder.SetEscapeHTML(escapeHTML)
+		err := encoder.Encode(body)
 		if err != nil {
 			request.errors = append(request.errors, err)
 			return

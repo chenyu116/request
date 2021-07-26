@@ -53,9 +53,6 @@ func NewRequest(rawURL string, options ...Option) *Request {
 		option(r)
 	}
 
-	if r.config == nil {
-		r.config = NewConfig()
-	}
 	if r.client == nil {
 		transport := &http.Transport{
 			DialContext: func(_ context.Context, network, addr string) (net.Conn, error) {
