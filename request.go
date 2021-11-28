@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -130,24 +129,33 @@ func (r *Request) Do() (err error) {
 		return
 	}
 	defer r.response.Body.Close()
-	if r.responseUnwrapTarget != nil {
-		var b []byte
-		b, err = ioutil.ReadAll(r.response.Body)
-		if err != nil {
-			return
-		}
-		err = json.Unmarshal(b, r.responseUnwrapTarget)
-		if err != nil {
-			return
+	if r.responseUnwrapTarget != nil || r.responseBodyWriteTo != nil {
+		if r.responseUnwrapTarget == nil && r.responseBodyWriteTo != nil {
+			_, err = io.Copy(r.responseBodyWriteTo, r.response.Body)
+			if err != nil {
+				return
+			}
+		} else if r.responseUnwrapTarget != nil && r.responseBodyWriteTo == nil {
+			err = json.NewDecoder(r.response.Body).Decode(r.responseUnwrapTarget)
+			if err != nil {
+				return
+			}
+		} else {
+			buf := new(bytes.Buffer)
+			_, err = io.Copy(buf, r.response.Body)
+			if err != nil {
+				return
+			}
+			err = json.Unmarshal(buf.Bytes(), r.responseUnwrapTarget)
+			if err != nil {
+				return
+			}
+			_, err = io.Copy(r.responseBodyWriteTo, buf)
+			if err != nil {
+				return
+			}
 		}
 	}
-	if r.responseBodyWriteTo != nil {
-		var b []byte
-		b, err = ioutil.ReadAll(r.response.Body)
-		if err != nil {
-			return
-		}
-		_, err = r.responseBodyWriteTo.Write(b)
-	}
+
 	return
 }
