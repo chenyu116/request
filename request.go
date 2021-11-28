@@ -45,9 +45,10 @@ type Request struct {
 	responseUnwrapTarget interface{}
 	retryTimes           uint8
 	errors               []error
+	statusCode           int
 }
 
-func NewRequest(rawURL string, options ...Option) *Request {
+func Do(rawURL string, options ...Option) error {
 	r := &Request{config: NewConfig(), rawURL: rawURL, query: make(url.Values), method: http.MethodGet, header: make(http.Header)}
 	for _, option := range options {
 		option(r)
@@ -78,18 +79,22 @@ func NewRequest(rawURL string, options ...Option) *Request {
 		}
 		r.client = &http.Client{Transport: transport}
 	}
-	return r
+	return r.Do()
 }
 
-func (r *Request) GetResponse() *http.Response {
+func (r *Request) Response() *http.Response {
 	return r.response
 }
 
-func (r *Request) GetRequest() *http.Request {
+func (r *Request) Request() *http.Request {
 	return r.request
 }
 
-func (r *Request) Do() (statusCode int, err error) {
+func (r *Request) StatusCode() int {
+	return r.statusCode
+}
+
+func (r *Request) Do() (err error) {
 	if len(r.errors) > 0 {
 		buf := new(bytes.Buffer)
 		for _, e := range r.errors {
@@ -118,24 +123,25 @@ func (r *Request) Do() (statusCode int, err error) {
 		if err != nil {
 			continue
 		}
-		statusCode = r.response.StatusCode
+		r.statusCode = r.response.StatusCode
 		break
 	}
 	if err != nil {
 		return
 	}
 	defer r.response.Body.Close()
-	switch r.responseUnwrapType {
-	case UnwrapTypeJson:
-		if r.responseUnwrapTarget != nil {
-			var b []byte
-			b, err = ioutil.ReadAll(r.response.Body)
-			if err != nil {
-				return
-			}
-			err = json.Unmarshal(b, r.responseUnwrapTarget)
+	if r.responseUnwrapTarget != nil {
+		var b []byte
+		b, err = ioutil.ReadAll(r.response.Body)
+		if err != nil {
+			return
 		}
-	case UnwrapTypeReadWriter:
+		err = json.Unmarshal(b, r.responseUnwrapTarget)
+		if err != nil {
+			return
+		}
+	}
+	if r.responseBodyWriteTo != nil {
 		var b []byte
 		b, err = ioutil.ReadAll(r.response.Body)
 		if err != nil {
