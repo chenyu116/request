@@ -246,7 +246,7 @@ func (r *Request) send() (err error) {
 	}
 	var i uint8
 	for i = 0; i <= r.retryTimes; i++ {
-		r.request, err = http.NewRequestWithContext(context.Background(), r.method, URL.String(), r.requestBody)
+		r.request, err = http.NewRequest(r.method, URL.String(), r.requestBody)
 		if err != nil {
 			continue
 		}
@@ -263,30 +263,41 @@ func (r *Request) send() (err error) {
 		return
 	}
 	defer r.response.Body.Close()
-	if r.responseUnwrapTarget != nil || r.responseBodyWriteTo != nil {
-		if r.responseUnwrapTarget == nil && r.responseBodyWriteTo != nil {
-			_, err = io.Copy(r.responseBodyWriteTo, r.response.Body)
-			if err != nil {
-				return
-			}
-		} else if r.responseUnwrapTarget != nil && r.responseBodyWriteTo == nil {
-			err = json.NewDecoder(r.response.Body).Decode(r.responseUnwrapTarget)
-			if err != nil {
-				return
-			}
-		} else {
-			buf := new(bytes.Buffer)
-			_, err = io.Copy(buf, r.response.Body)
-			if err != nil {
-				return
-			}
-			err = json.Unmarshal(buf.Bytes(), r.responseUnwrapTarget)
-			if err != nil {
-				return
-			}
-			_, err = io.Copy(r.responseBodyWriteTo, buf)
-			if err != nil {
-				return
+	if r.non20xIsError && r.statusCode >= 300 {
+		buf := new(bytes.Buffer)
+		_, err = io.Copy(buf, r.response.Body)
+		if err != nil {
+			return
+		}
+		err = fmt.Errorf("%s", buf.String())
+		return
+	}
+	if r.statusCode != http.StatusNoContent {
+		if r.responseUnwrapTarget != nil || r.responseBodyWriteTo != nil {
+			if r.responseUnwrapTarget == nil && r.responseBodyWriteTo != nil {
+				_, err = io.Copy(r.responseBodyWriteTo, r.response.Body)
+				if err != nil {
+					return
+				}
+			} else if r.responseUnwrapTarget != nil && r.responseBodyWriteTo == nil {
+				err = json.NewDecoder(r.response.Body).Decode(r.responseUnwrapTarget)
+				if err != nil {
+					return
+				}
+			} else {
+				buf := new(bytes.Buffer)
+				_, err = io.Copy(buf, r.response.Body)
+				if err != nil {
+					return
+				}
+				err = json.Unmarshal(buf.Bytes(), r.responseUnwrapTarget)
+				if err != nil {
+					return
+				}
+				_, err = io.Copy(r.responseBodyWriteTo, buf)
+				if err != nil {
+					return
+				}
 			}
 		}
 	}
