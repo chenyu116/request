@@ -21,7 +21,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -45,6 +45,7 @@ type Request struct {
 	retryTimes           uint8
 	errors               []error
 	statusCode           int
+	non20xIsError bool
 }
 
 func POST(rawURL string, options ...Option) (*Request, error) {
@@ -66,7 +67,7 @@ func OPTIONS(rawURL string, options ...Option) (*Request, error) {
 	return Do(rawURL, options...)
 }
 func NewRequest(rawURL string, options ...Option) *Request {
-	r := &Request{config: NewConfig(), rawURL: rawURL, query: make(url.Values), method: http.MethodGet, header: make(http.Header)}
+	r := &Request{config: NewConfig(), rawURL: rawURL, query: make(url.Values), method: http.MethodGet, header: make(http.Header), non20xIsError: true}
 	for _, option := range options {
 		option(r)
 	}
@@ -146,15 +147,6 @@ func (r *Request) StatusCode() int {
 }
 
 func (r *Request) Do() (statusCode int, err error) {
-	if len(r.errors) > 0 {
-		buf := new(bytes.Buffer)
-		for _, e := range r.errors {
-			buf.WriteString(e.Error())
-			buf.WriteString("\n")
-		}
-		err = errors.New(buf.String())
-		return
-	}
 	URL, err := url.Parse(r.rawURL)
 	if err != nil {
 		return
@@ -181,6 +173,15 @@ func (r *Request) Do() (statusCode int, err error) {
 		return
 	}
 	defer r.response.Body.Close()
+	if r.non20xIsError && statusCode >= 300 {
+		buf := new(bytes.Buffer)
+		_, err = io.Copy(buf, r.response.Body)
+		if err != nil {
+			return
+		}
+		err = fmt.Errorf("status:%d response:%s", statusCode, buf.String())
+		return
+	}
 	if r.responseUnwrapTarget != nil || r.responseBodyWriteTo != nil {
 		if r.responseUnwrapTarget == nil && r.responseBodyWriteTo != nil {
 			_, err = io.Copy(r.responseBodyWriteTo, r.response.Body)
@@ -213,15 +214,6 @@ func (r *Request) Do() (statusCode int, err error) {
 }
 
 func (r *Request) send() (err error) {
-	if len(r.errors) > 0 {
-		buf := new(bytes.Buffer)
-		for _, e := range r.errors {
-			buf.WriteString(e.Error())
-			buf.WriteString("\n")
-		}
-		err = errors.New(buf.String())
-		return
-	}
 	URL, err := url.Parse(r.rawURL)
 	if err != nil {
 		return

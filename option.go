@@ -51,6 +51,12 @@ func WithRetryTimes(retryTimes uint8) Option {
 	}
 }
 
+func DisableNon20xIsError() Option {
+	return func(request *Request) {
+		request.non20xIsError = false
+	}
+}
+
 func WithMethodPost() Option {
 	return func(request *Request) {
 		request.method = http.MethodPost
