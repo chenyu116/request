@@ -45,7 +45,7 @@ type Request struct {
 	retryTimes           uint8
 	errors               []error
 	statusCode           int
-	non20xIsError bool
+	non20xIsError        bool
 }
 
 func POST(rawURL string, options ...Option) (*Request, error) {
@@ -66,6 +66,27 @@ func OPTIONS(rawURL string, options ...Option) (*Request, error) {
 	options = append(options, WithMethodOptions())
 	return Do(rawURL, options...)
 }
+
+func DELETE(rawURL string, options ...Option) (*Request, error) {
+	options = append(options, WithMethodDelete())
+	return Do(rawURL, options...)
+}
+
+func TRACE(rawURL string, options ...Option) (*Request, error) {
+	options = append(options, WithMethodTrace())
+	return Do(rawURL, options...)
+}
+
+func HEAD(rawURL string, options ...Option) (*Request, error) {
+	options = append(options, WithMethodHead())
+	return Do(rawURL, options...)
+}
+func CONNECT(rawURL string, options ...Option) (*Request, error) {
+	options = append(options, WithMethodConnect())
+	return Do(rawURL, options...)
+}
+
+// NewRequest deprecated method
 func NewRequest(rawURL string, options ...Option) *Request {
 	r := &Request{config: NewConfig(), rawURL: rawURL, query: make(url.Values), method: http.MethodGet, header: make(http.Header), non20xIsError: true}
 	for _, option := range options {
@@ -101,7 +122,7 @@ func NewRequest(rawURL string, options ...Option) *Request {
 }
 
 func Do(rawURL string, options ...Option) (*Request, error) {
-	r := &Request{config: NewConfig(), rawURL: rawURL, query: make(url.Values), method: http.MethodGet, header: make(http.Header)}
+	r := &Request{config: NewConfig(), rawURL: rawURL, query: make(url.Values), method: http.MethodGet, header: make(http.Header), non20xIsError: true}
 	for _, option := range options {
 		option(r)
 	}
@@ -134,11 +155,11 @@ func Do(rawURL string, options ...Option) (*Request, error) {
 	return r, r.send()
 }
 
-func (r *Request) GetResponse() *http.Response {
+func (r *Request) Response() *http.Response {
 	return r.response
 }
 
-func (r *Request) GetRequest() *http.Request {
+func (r *Request) Request() *http.Request {
 	return r.request
 }
 
@@ -156,7 +177,7 @@ func (r *Request) Do() (statusCode int, err error) {
 	}
 	var i uint8
 	for i = 0; i <= r.retryTimes; i++ {
-		r.request, err = http.NewRequestWithContext(context.Background(), r.method, URL.String(), r.requestBody)
+		r.request, err = http.NewRequest(r.method, URL.String(), r.requestBody)
 		if err != nil {
 			continue
 		}
@@ -179,33 +200,35 @@ func (r *Request) Do() (statusCode int, err error) {
 		if err != nil {
 			return
 		}
-		err = fmt.Errorf("status:%d response:%s", statusCode, buf.String())
+		err = fmt.Errorf("%s", buf.String())
 		return
 	}
-	if r.responseUnwrapTarget != nil || r.responseBodyWriteTo != nil {
-		if r.responseUnwrapTarget == nil && r.responseBodyWriteTo != nil {
-			_, err = io.Copy(r.responseBodyWriteTo, r.response.Body)
-			if err != nil {
-				return
-			}
-		} else if r.responseUnwrapTarget != nil && r.responseBodyWriteTo == nil {
-			err = json.NewDecoder(r.response.Body).Decode(r.responseUnwrapTarget)
-			if err != nil {
-				return
-			}
-		} else {
-			buf := new(bytes.Buffer)
-			_, err = io.Copy(buf, r.response.Body)
-			if err != nil {
-				return
-			}
-			err = json.Unmarshal(buf.Bytes(), r.responseUnwrapTarget)
-			if err != nil {
-				return
-			}
-			_, err = io.Copy(r.responseBodyWriteTo, buf)
-			if err != nil {
-				return
+	if statusCode != http.StatusNoContent {
+		if r.responseUnwrapTarget != nil || r.responseBodyWriteTo != nil {
+			if r.responseUnwrapTarget == nil && r.responseBodyWriteTo != nil {
+				_, err = io.Copy(r.responseBodyWriteTo, r.response.Body)
+				if err != nil {
+					return
+				}
+			} else if r.responseUnwrapTarget != nil && r.responseBodyWriteTo == nil {
+				err = json.NewDecoder(r.response.Body).Decode(r.responseUnwrapTarget)
+				if err != nil {
+					return
+				}
+			} else {
+				buf := new(bytes.Buffer)
+				_, err = io.Copy(buf, r.response.Body)
+				if err != nil {
+					return
+				}
+				err = json.Unmarshal(buf.Bytes(), r.responseUnwrapTarget)
+				if err != nil {
+					return
+				}
+				_, err = io.Copy(r.responseBodyWriteTo, buf)
+				if err != nil {
+					return
+				}
 			}
 		}
 	}
