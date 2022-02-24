@@ -28,6 +28,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 type UnwrapType string
@@ -42,6 +43,13 @@ type Option func(request *Request)
 func WithConfig(config *Config) Option {
 	return func(request *Request) {
 		request.config = config
+	}
+}
+
+func WithRetry(retryTimes uint8, retryInterval time.Duration) Option {
+	return func(request *Request) {
+		request.retryTimes = retryTimes
+		request.retryInterval = retryInterval
 	}
 }
 

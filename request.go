@@ -26,6 +26,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 type Request struct {
@@ -43,9 +44,14 @@ type Request struct {
 	responseUnwrapType   UnwrapType
 	responseUnwrapTarget interface{}
 	retryTimes           uint8
+	retryInterval        time.Duration
 	errors               []error
 	statusCode           int
 	non20xIsError        bool
+}
+
+func GET(rawURL string, options ...Option) (*Request, error) {
+	return Do(rawURL, options...)
 }
 
 func POST(rawURL string, options ...Option) (*Request, error) {
@@ -122,36 +128,7 @@ func NewRequest(rawURL string, options ...Option) *Request {
 }
 
 func Do(rawURL string, options ...Option) (*Request, error) {
-	r := &Request{config: NewConfig(), rawURL: rawURL, query: make(url.Values), method: http.MethodGet, header: make(http.Header), non20xIsError: true}
-	for _, option := range options {
-		option(r)
-	}
-
-	if r.client == nil {
-		transport := &http.Transport{
-			DialContext: func(_ context.Context, network, addr string) (net.Conn, error) {
-				conn, err := net.DialTimeout(network, addr, r.config.HTTPTimeout.ConnectTimeout)
-				if err != nil {
-					return nil, err
-				}
-				return newTimeoutConn(conn, r.config.HTTPTimeout), nil
-			},
-			ResponseHeaderTimeout: r.config.HTTPTimeout.HeaderTimeout,
-			TLSClientConfig:       &tls.Config{InsecureSkipVerify: r.config.InsecureSkipVerify},
-		}
-
-		// Proxy
-		if r.config.UseProxy && r.config.ProxyHost != "" {
-			proxyURL, err := url.Parse(r.config.ProxyHost)
-			if err == nil {
-				if r.config.IsAuthProxy {
-					proxyURL.User = url.UserPassword(r.config.ProxyUser, r.config.ProxyPassword)
-				}
-				transport.Proxy = http.ProxyURL(proxyURL)
-			}
-		}
-		r.client = &http.Client{Transport: transport}
-	}
+	r := NewRequest(rawURL, options...)
 	return r, r.send()
 }
 
@@ -182,9 +159,11 @@ func (r *Request) Do() (statusCode int, err error) {
 			continue
 		}
 		r.request.Header = r.header
-
 		r.response, err = r.client.Do(r.request)
 		if err != nil {
+			if r.retryInterval > 0 {
+				time.Sleep(r.retryInterval)
+			}
 			continue
 		}
 		statusCode = r.response.StatusCode
