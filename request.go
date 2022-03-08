@@ -156,6 +156,9 @@ func (r *Request) Do() (statusCode int, err error) {
 	for i = 0; i <= r.retryTimes; i++ {
 		r.request, err = http.NewRequest(r.method, URL.String(), r.requestBody)
 		if err != nil {
+			if r.retryInterval > 0 {
+				time.Sleep(r.retryInterval)
+			}
 			continue
 		}
 		r.request.Header = r.header
@@ -227,12 +230,18 @@ func (r *Request) send() (err error) {
 	for i = 0; i <= r.retryTimes; i++ {
 		r.request, err = http.NewRequest(r.method, URL.String(), r.requestBody)
 		if err != nil {
+			if r.retryInterval > 0 {
+				time.Sleep(r.retryInterval)
+			}
 			continue
 		}
 		r.request.Header = r.header
 
 		r.response, err = r.client.Do(r.request)
 		if err != nil {
+			if r.retryInterval > 0 {
+				time.Sleep(r.retryInterval)
+			}
 			continue
 		}
 		r.statusCode = r.response.StatusCode
